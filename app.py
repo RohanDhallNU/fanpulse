@@ -58,7 +58,7 @@ def show_error(msg, fix=""):
 
 
 # ---------------------------------------------------------------- header
-st.markdown('<p class="fp-title">Fan<span>Pulse</span></p>', unsafe_allow_html=True)
+st.markdown('<div class="fp-title">Fan<span>Pulse</span></div>', unsafe_allow_html=True)
 st.markdown('<p class="fp-sub">Turn hundreds of app reviews into a ranked list of what is driving customers away, '
             'so you know which problem to fix first.</p>', unsafe_allow_html=True)
 
@@ -187,8 +187,8 @@ with tabs[0]:
         chart[stats["competitor"]] = pd.Series(stats["comp"]["neg_by_stage"])
     chart.index = [fc.STAGE_LABEL[s] for s in chart.index]
     st.markdown('<p class="fp-head">Where customers get stuck (% of each app’s reviews that are negative)</p>', unsafe_allow_html=True)
-    st.bar_chart(chart, horizontal=True, color=[TEAL, AMBER][:len(chart.columns)])
-
+    st.bar_chart(chart, horizontal=True, stack=False, color=[TEAL, AMBER][:len(chart.columns)])
+    
 with tabs[1]:
     if not stats["urgent"]:
         st.success("No urgent cases this week.")
