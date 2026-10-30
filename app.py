@@ -10,7 +10,7 @@ st.markdown(f"""
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
 html, body, [class*="css"], .stMarkdown, .stText, button, input, textarea {{ font-family: 'Manrope', system-ui, sans-serif; }}
-.block-container {{ padding-top: 2.2rem; max-width: 1100px; }}
+.block-container {{ padding-top: 4.5rem; max-width: 1100px; }}
 h1, h2, h3 {{ color: {INK}; letter-spacing: -0.01em; }}
 .fp-title {{ font-size: 2.6rem; font-weight: 800; color: {INK}; margin: 0; line-height: 1.05; }}
 .fp-title span {{ color: {TEAL}; }}
