@@ -35,6 +35,10 @@ h1, h2, h3 {{ color: {INK}; letter-spacing: -0.01em; }}
 .fp-note {{ color: {SLATE}; font-size: .88rem; }}
 .fp-err {{ border-left: 4px solid {ALARM}; background: #FFF6F7; border-radius: 0 12px 12px 0; padding: 14px 18px; }}
 .fp-err b {{ color: {ALARM}; display: block; font-size: 1.05rem; margin-bottom: 4px; }}
+.fp-preview {{ border: 1px dashed #B9C3D1; border-radius: 16px; padding: 14px; margin: 14px 0 16px; opacity: .92; }}
+.fp-preview .tag {{ color: {SLATE}; font-weight: 700; font-size: .85rem; }}
+.fp-mini {{ display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }}
+.fp-mini span {{ background: {PAPER}; border: 1px solid #E3E8EF; border-radius: 999px; padding: 4px 12px; font-size: .85rem; color: {INK}; }}
 @media (max-width: 760px) {{ .fp-steps {{ grid-template-columns: 1fr; }} .fp-title {{ font-size: 2rem; }} }}
 </style>""", unsafe_allow_html=True)
 
@@ -119,7 +123,7 @@ if reviews is not None:
     key = hashlib.sha1(raw + f"|{my_app}|{competitor}|{limit}|{'|'.join(headlines)}".encode()).hexdigest()
 cache = result_cache()
 
-if go:
+if go or st.session_state.pop("run_now", False):
     try:
         api_key = st.secrets.get("GEMINI_API_KEY", "")
     except Exception:
@@ -154,7 +158,16 @@ if res is None:
     if reviews is None:
         st.info("Upload a CSV in the left panel to begin, or switch back to the sample.")
     else:
-        st.info(f"{len(reviews)} reviews are ready. Check the settings on the left, then press **Analyze reviews**.")
+        st.markdown(f"<p class='fp-head'>{len(reviews)} real reviews are loaded and ready.</p>", unsafe_allow_html=True)
+        st.button(f"Analyze {min(limit, len(reviews))} reviews now", type="primary",
+                  on_click=lambda: st.session_state.update(run_now=True))
+        st.caption("Takes about 1–2 minutes. You can change the app, competitor or number of reviews in the left panel first.")
+        st.markdown("""<div class="fp-preview"><div class="tag">Example of what you will get</div>
+          <div class="fp-fix" style="margin:8px 0 0"><div class="lbl">Fix this first</div><div class="ttl">Withdrawals slow or blocked</div>
+          <div class="why">The top complaint by volume and severity: customers cannot get their money out, and many say they are leaving.</div>
+          <div class="step"><b>Next step:</b> Audit the withdrawal queue and tell waiting customers how long it will take.</div></div>
+          <div class="fp-mini"><span>Top 5 problems with real quotes</span><span>Urgent cases and who owns them</span><span>Brand promise vs. reality</span><span>You vs. a competitor</span><span>Tests to run next week</span></div>
+        </div>""", unsafe_allow_html=True)
         with st.expander("Preview the reviews FanPulse will read"):
             st.dataframe(reviews[["app", "date", "rating", "title", "text"]].head(20), use_container_width=True, hide_index=True)
     for n in notes:
