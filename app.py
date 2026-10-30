@@ -44,7 +44,7 @@ def esc(s):
 
 @st.cache_data(show_spinner=False)
 def sample_bytes():
-    with open("data/sample_reviews.csv", "rb") as f:
+    with open("sample_reviews.csv", "rb") as f:
         return f.read()
 
 
