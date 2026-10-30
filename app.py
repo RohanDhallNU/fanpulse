@@ -1,4 +1,5 @@
 import hashlib
+import time
 import pandas as pd
 import streamlit as st
 import fanpulse_core as fc
@@ -68,6 +69,7 @@ with st.sidebar:
     source = st.radio("Which reviews should FanPulse read?",
                       ["Sample: PrizePicks vs. Underdog (Oct 2026)", "Upload my own CSV"],
                       help="The sample is 180 real App Store reviews of PrizePicks and its competitor Underdog, collected in October 2026.")
+    st.caption("Start with the sample. Upload only if you have your own app’s reviews saved as a CSV file.")
     raw, fname = None, None
     if source.startswith("Sample"):
         raw, fname = sample_bytes(), "sample_reviews.csv"
@@ -99,7 +101,7 @@ with st.sidebar:
         top = min(fc.MAX_REVIEWS, available)
         limit = st.slider("How many reviews to read", min_value=min(fc.MIN_REVIEWS, top), max_value=top,
                           value=min(120, top), step=10 if top >= 20 else 1,
-                          help="About 1 minute per 100 reviews on the free AI tier.")
+                          help="Drag to choose. A new number means a fresh analysis, which takes 1–2 minutes.")
         news = st.text_area("Headlines about your brand (optional)", "\n".join(headlines), height=140,
                             help="One per line. FanPulse compares what the brand promises in the news with what customers experience.")
         headlines = [h.strip() for h in news.splitlines() if h.strip()]
@@ -127,9 +129,11 @@ if go:
         st.stop()
     if key not in cache:
         sample = fc.pick_sample(reviews, my_app, competitor, limit)
+        st.info(f"Reading {len(sample)} reviews. This takes about 1–2 minutes. Keep this tab open and don’t change any settings until it finishes.")
         bar = st.progress(0.0, text="Starting")
+        _start = time.time()
         def progress(done, total, msg):
-            bar.progress(min(done / max(total, 1), 1.0) * 0.85, text=msg)
+            bar.progress(min(done / max(total, 1), 1.0) * 0.85, text=f"{msg} ({int(time.time() - _start)}s)")
         try:
             cache[key] = fc.analyse(api_key, sample, headlines, my_app, competitor, progress)
         except fc.FanPulseError as e:
@@ -188,7 +192,7 @@ with tabs[0]:
     chart.index = [fc.STAGE_LABEL[s] for s in chart.index]
     st.markdown('<p class="fp-head">Where customers get stuck (% of each app’s reviews that are negative)</p>', unsafe_allow_html=True)
     st.bar_chart(chart, horizontal=True, stack=False, color=[TEAL, AMBER][:len(chart.columns)])
-    
+
 with tabs[1]:
     if not stats["urgent"]:
         st.success("No urgent cases this week.")
@@ -226,7 +230,7 @@ with tabs[4]:
     if sr:
         st.markdown('<p class="fp-head">Ready-to-send support reply</p>', unsafe_allow_html=True)
         st.markdown(f"*For: {sr.get('issue', '')}*")
-        st.code(sr.get("reply", ""), language=None)
+        st.code(sr.get("reply", ""), language=None, wrap_lines=True)
 
 with tabs[5]:
     st.markdown(f"- **{stats['tagged']} of {stats['total']}** reviews were tagged by the AI.")

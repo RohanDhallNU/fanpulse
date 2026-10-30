@@ -9,10 +9,11 @@ TAGGER_MODEL = "gemini-3.5-flash-lite"
 CRITIC_MODEL = "gemini-3.1-flash-lite"
 REPORTER_MODEL = "gemini-3.8-flash"
 FALLBACK_MODEL = "gemini-3.5-flash-lite"
-BATCH_SIZE = 15            # reviews per AI call
+BATCH_SIZE = 25            # reviews per AI call (fewer, faster calls)
 CALL_GAP_SECONDS = 4.5     # stays under the free tier's 15 requests/minute
 MIN_REVIEWS = 10
 MAX_REVIEWS = 200
+TIME_BUDGET_SECONDS = 170  # never let a run hang: stop and report after this
 CONFIDENCE_THRESHOLD = 0.7
 
 STAGES = ["onboarding", "promos", "payments", "gameplay", "support_account", "general"]
@@ -147,7 +148,7 @@ class AIError(Exception):
     pass
 
 
-def call_gemini(api_key, model, system, user, max_tokens=4096, retries=3):
+def call_gemini(api_key, model, system, user, max_tokens=4096, retries=2):
     body = {"contents": [{"role": "user", "parts": [{"text": user}]}],
             "generationConfig": {"responseMimeType": "application/json", "temperature": 0.2, "maxOutputTokens": max_tokens}}
     if system:
@@ -156,14 +157,14 @@ def call_gemini(api_key, model, system, user, max_tokens=4096, retries=3):
     for attempt in range(retries):
         try:
             r = requests.post(GEMINI_URL.format(model=model), headers={"x-goog-api-key": api_key},
-                              json=body, timeout=90)
+                              json=body, timeout=45)
         except requests.RequestException as e:
             last = f"network problem ({type(e).__name__})"
-            time.sleep(2 * (attempt + 1) ** 2)
+            time.sleep(2 * (attempt + 1))
             continue
         if r.status_code in (429, 500, 502, 503, 504):
             last = {429: "the free AI quota is busy (rate limit)"}.get(r.status_code, f"the AI service is overloaded ({r.status_code})")
-            time.sleep(3 * (attempt + 1) ** 2)
+            time.sleep(3 * (attempt + 1))
             continue
         if r.status_code in (400, 401, 403, 404):
             raise AIError(f"the AI service rejected the request ({r.status_code})")
@@ -224,11 +225,14 @@ def _norm(t):
     return o
 
 
-def tag_reviews(api_key, sample, progress=lambda done, total, msg: None, call=call_gemini):
+def tag_reviews(api_key, sample, progress=lambda done, total, msg: None, call=call_gemini, deadline=None):
     rows = sample.to_dict("records")
     tags, failed = {}, []
     batches = [rows[i:i + BATCH_SIZE] for i in range(0, len(rows), BATCH_SIZE)]
     for b_i, batch in enumerate(batches):
+        if deadline and time.time() > deadline:
+            failed += [(r["id"], "the run took too long, so this review was skipped") for b in batches[b_i:] for r in b]
+            break
         progress(b_i, len(batches), f"Reading reviews {b_i * BATCH_SIZE + 1}–{b_i * BATCH_SIZE + len(batch)} of {len(rows)}")
         if b_i:
             time.sleep(CALL_GAP_SECONDS)
@@ -385,12 +389,15 @@ def report_markdown(stats, rep, audit):
 
 def analyse(api_key, sample, headlines, my_app, competitor, progress=lambda *a: None, call=call_gemini):
     t0 = time.time()
-    tags, failed = tag_reviews(api_key, sample, progress, call)
+    tags, failed = tag_reviews(api_key, sample, progress, call, deadline=t0 + TIME_BUDGET_SECONDS)
     if len(tags) < max(MIN_REVIEWS // 2, 0.5 * len(sample)):
         raise FanPulseError("The AI service could not read enough of the reviews right now.",
                             f"Reason: {failed[0][1] if failed else 'unknown'}. Wait a minute and press Analyze reviews again.")
     progress(1, 1, "Double-checking unsure tags")
-    tags, audit = second_opinion(api_key, sample, tags, call)
+    if time.time() - t0 < TIME_BUDGET_SECONDS:
+        tags, audit = second_opinion(api_key, sample, tags, call)
+    else:
+        audit = {"flagged": 0, "agree": 0, "override": 0, "failed": 0, "examples": []}
     table = build_table(sample, tags)
     stats = compute_stats(table, my_app, competitor)
     progress(1, 1, "Writing the summary")
